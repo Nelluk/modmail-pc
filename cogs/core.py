@@ -8,7 +8,6 @@ import discord
 
 from discord.ext import commands
 
-from cogs.modmail_channel import ModMailEvents
 from utils import checks
 from utils.paginator import Paginator
 
@@ -24,12 +23,12 @@ class Core(commands.Cog):
     @checks.is_mod()
     @commands.guild_only()
     @commands.command(
-        description="Reply to the ticket, useful when anonymous messaging is enabled.", usage="reply <message>",
+        description="Reply to the ticket, useful when anonymous messaging is enabled.",
+        usage="reply <message>",
         aliases=["r"]
     )
-    async def reply(self, ctx, *, message: str = None):
-        modmail = ModMailEvents(self.bot)
-        await modmail.send_mail_mod(ctx.message, ctx.prefix, False, message)
+    async def reply(self, ctx, *, message):
+        await self.bot.cogs["ModMailEvents"].send_mail_mod(ctx.message, ctx.prefix, False, message)
 
     @checks.is_modmail_channel()
     @checks.in_database()
@@ -37,8 +36,7 @@ class Core(commands.Cog):
     @commands.guild_only()
     @commands.command(description="Reply to the ticket anonymously.", usage="areply <message>")
     async def areply(self, ctx, *, message):
-        modmail = ModMailEvents(self.bot)
-        await modmail.send_mail_mod(ctx.message, ctx.prefix, True, message)
+        await self.bot.cogs["ModMailEvents"].send_mail_mod(ctx.message, ctx.prefix, True, message)
 
     async def close_channel(self, ctx, reason, anon: bool = False):
         try:
@@ -54,7 +52,7 @@ class Core(commands.Cog):
                 timestamp=datetime.datetime.utcnow(),
             )
             embed.set_author(
-                name=f"{ctx.author.name}#{ctx.author.discriminator}" if anon is False else "Anonymous#0000",
+                name=str(ctx.author.name) if anon is False else "Anonymous#0000",
                 icon_url=ctx.author.avatar_url if anon is False else "https://cdn.discordapp.com/embed/avatars/0.png",
             )
             embed.set_footer(text=f"{ctx.guild.name} | {ctx.guild.id}", icon_url=ctx.guild.icon_url)
@@ -70,7 +68,8 @@ class Core(commands.Cog):
                             timestamp=datetime.datetime.utcnow(),
                         )
                         embed2.set_footer(
-                            text=f"{ctx.guild.name} | {ctx.guild.id}", icon_url=ctx.guild.icon_url,
+                            text=f"{ctx.guild.name} | {ctx.guild.id}",
+                            icon_url=ctx.guild.icon_url,
                         )
                         await member.send(embed=embed2)
                     await member.send(embed=embed)
@@ -83,12 +82,10 @@ class Core(commands.Cog):
                         if member is None:
                             member = await self.bot.fetch_user(self.bot.tools.get_modmail_user(ctx.channel))
                         if member:
-                            embed.set_footer(
-                                text=f"{member.name}#{member.discriminator} | {member.id}", icon_url=member.avatar_url,
-                            )
+                            embed.set_footer(text=f"{member} | {member.id}", icon_url=member.avatar_url)
                         else:
                             embed.set_footer(
-                                text=f"Unknown#0000 | 000000000000000000",
+                                text="Unknown#0000 | 000000000000000000",
                                 icon_url="https://cdn.discordapp.com/embed/avatars/0.png",
                             )
                         if data[7] == 1:
@@ -131,7 +128,7 @@ class Core(commands.Cog):
                             log_url = msg.attachments[0].url[39:-4]
                             log_url = log_url.replace("modmail_log_", "")
                             log_url = [hex(int(some_id))[2:] for some_id in log_url.split("/")]
-                            log_url = f"https://discordtemplates.me/modmail-logs/{'-'.join(log_url)}"
+                            log_url = f"https://modmail.xyz/logs/{'-'.join(log_url)}"
                             embed.add_field(name="Message Logs", value=log_url, inline=False)
                             await asyncio.sleep(0.5)
                             await msg.edit(embed=embed)
@@ -142,7 +139,8 @@ class Core(commands.Cog):
         except discord.Forbidden:
             await ctx.send(
                 embed=discord.Embed(
-                    description="Missing permissions to delete this channel.", colour=self.bot.error_colour,
+                    description="Missing permissions to delete this channel.",
+                    colour=self.bot.error_colour,
                 )
             )
 
@@ -168,21 +166,19 @@ class Core(commands.Cog):
     @checks.is_mod()
     @commands.bot_has_permissions(manage_channels=True)
     @commands.guild_only()
-    @commands.command(description="Close all of the channel.", usage="closeall [reason]")
+    @commands.command(description="Close all of the channels.", usage="closeall [reason]")
     async def closeall(self, ctx, *, reason: str = None):
-        category = (await self.bot.get_data(ctx.guild.id))[2]
-        category = ctx.guild.get_channel(category)
-        if category:
-            for channel in category.text_channels:
-                if checks.is_modmail_channel2(self.bot, channel):
-                    msg = copy.copy(ctx.message)
-                    msg.channel = channel
-                    new_ctx = await self.bot.get_context(msg, cls=type(ctx))
-                    await self.close_channel(new_ctx, reason)
+        for channel in ctx.guild.text_channels:
+            if checks.is_modmail_channel2(self.bot, channel):
+                msg = copy.copy(ctx.message)
+                msg.channel = channel
+                new_ctx = await self.bot.get_context(msg, cls=type(ctx))
+                await self.close_channel(new_ctx, reason)
         try:
             await ctx.send(
                 embed=discord.Embed(
-                    description="All channels are successfully closed.", colour=self.bot.primary_colour,
+                    description="All channels are successfully closed.",
+                    colour=self.bot.primary_colour,
                 )
             )
         except discord.HTTPException:
@@ -192,21 +188,19 @@ class Core(commands.Cog):
     @checks.is_mod()
     @commands.bot_has_permissions(manage_channels=True)
     @commands.guild_only()
-    @commands.command(description="Close all of the channel anonymously.", usage="acloseall [reason]")
+    @commands.command(description="Close all of the channels anonymously.", usage="acloseall [reason]")
     async def acloseall(self, ctx, *, reason: str = None):
-        category = (await self.bot.get_data(ctx.guild.id))[2]
-        category = ctx.guild.get_channel(category)
-        if category:
-            for channel in category.text_channels:
-                if checks.is_modmail_channel2(self.bot, channel):
-                    msg = copy.copy(ctx.message)
-                    msg.channel = channel
-                    new_ctx = await self.bot.get_context(msg, cls=type(ctx))
-                    await self.close_channel(new_ctx, reason, True)
+        for channel in ctx.guild.text_channels:
+            if checks.is_modmail_channel2(self.bot, channel):
+                msg = copy.copy(ctx.message)
+                msg.channel = channel
+                new_ctx = await self.bot.get_context(msg, cls=type(ctx))
+                await self.close_channel(new_ctx, reason, True)
         try:
             await ctx.send(
                 embed=discord.Embed(
-                    description="All channels are successfully closed anonymously.", colour=self.bot.primary_colour,
+                    description="All channels are successfully closed anonymously.",
+                    colour=self.bot.primary_colour,
                 )
             )
         except discord.HTTPException:
@@ -216,7 +210,9 @@ class Core(commands.Cog):
     @checks.is_mod()
     @commands.guild_only()
     @commands.command(
-        description="Blacklist a user from creating tickets.", usage="blacklist <member>", aliases=["block"],
+        description="Blacklist a user to prevent them from creating tickets.",
+        usage="blacklist <member>",
+        aliases=["block"],
     )
     async def blacklist(self, ctx, *, member: discord.Member):
         blacklist = (await self.bot.get_data(ctx.guild.id))[9]
@@ -236,7 +232,9 @@ class Core(commands.Cog):
     @checks.is_mod()
     @commands.guild_only()
     @commands.command(
-        description="Whitelist a user from creating tickets.", usage="whitelist <member>", aliases=["unblock"],
+        description="Whitelist a user to allow them to creating tickets.",
+        usage="whitelist <member>",
+        aliases=["unblock"],
     )
     async def whitelist(self, ctx, *, member: discord.Member):
         blacklist = (await self.bot.get_data(ctx.guild.id))[9]
